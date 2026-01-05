@@ -38,8 +38,10 @@ exports.signup = async(req,res) =>{
 exports.login = async(req,res)=>{
     try{
   const {email , password} = req.body;
+  /*
   if(!email || !password) return
   res.status(400).json({message: "All fields required"});
+  */
   //Find user
   const user = await User.findOne({email});
   if(!user) 

@@ -50,19 +50,24 @@ exports.getWorkerById = async (req, res)=>{
     }
 }
 //delete worker
-exports.deleteWorker = async(req, res) =>{
-    try{
-    const id = req.params.id;
-    const worker = await User.findById(id);
-    if(!worker) return   res.status(400).json({message: "Worker not Found"});
-    await worker.remove();
-   
-   return  res.json({message: "Worker deleted"});
-    }catch(err){
-   console.error(err);
-  return  res.status(500).json({message: "Server error"});
+
+exports.deleteWorker = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const worker = await User.findByIdAndDelete(id);
+
+    if (!worker) {
+      return res.status(404).json({ message: "Worker not found" });
     }
-}
+
+    return res.json({ message: "Worker deleted successfully" });
+  } catch (err) {
+    console.error("DELETE WORKER ERROR 👉", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 //update worker
 exports.updateWorker = async(req, res)=>{
     try{
@@ -117,7 +122,9 @@ exports.createTask = async (req, res) =>{
 exports.assignTask = async (req, res) =>{
  try{
     const {taskId, workerId} = req.body;
-    if(!taskId, workerId) return res.status(400).json({message: "All Fields are required"});
+   // if(!taskId || !workerId) return res.status(400).json({message: "All Fields are required xyz"});
+    
+    console.log( "xyz",taskId,workerId );
     const task = await Task.findById(taskId);
     if(!task) return res.status(404).json({message: "Task Not Found"});
     task.assignedTo = workerId;
@@ -167,27 +174,31 @@ console.error(err);
 //Update status (worker/admin)
 exports.updateTaskStatus = async (req, res) =>{
     try{
-        const {status} = req.body;
+        const { status } = req.body;
         const id = req.params.id;
+
         const task = await Task.findById(id);
-        if(!task) return
-        res.status(404).json({message: "Task Not Found"});
-      task.status = status;
-      await task.save();
-      //emit socket event
-      if(req.app.get("io")){
-        req.app.get("io").emit("taskUpdated",
-            {taskId: task._id, status: task.status}
-        );
-      }
-      return res.json({message: "Status Updated", task})
-    }catch(err){
+        if (!task) {
+            return res.status(404).json({ message: "Task Not Found" });
+        }
+
+        task.status = status;
+        await task.save();
+
+        // emit socket event
+        if (req.app.get("io")) {
+            req.app.get("io").emit("taskUpdated", {
+                taskId: task._id,
+                status: task.status,
+            });
+        }
+
+        return res.json({ message: "Status Updated", task });
+    } catch (err) {
         console.error(err);
-     
-         return  res.status(500).json({message: "Server error"})
+        return res.status(500).json({ message: "Server error" });
     }
 };
-//Dashboard
 exports.getDashboard = async (req, res) => {
     try{
         const totalTasks = await Task.countDocuments();
@@ -212,11 +223,15 @@ exports.updateAdminProfile = async (req, res) =>{
     try{
         const admin = await User.findById(req.user._id);
         if(!admin) return res.status(404).json({message: "Admin Not Found"});
+
+        if (!req.user) {
+  return res.status(401).json({ message: "Unauthorized" });
+}
+
         admin.name = req.body.name|| admin.name;
         admin.email = req.body.email || admin.email;
         if(req.file){
-            admin.profileImage = `/uploads/${req.file.filename}`;
-        }
+            admin.profileImage = `/uploads/${req.file.filename}`;        }
         await admin.save();
         return res.json({message: "Profile Updated", admin});
     }catch(err){

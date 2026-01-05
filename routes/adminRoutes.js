@@ -16,7 +16,7 @@ router.put("/worker/:id", protect, adminOnly, upload.single("profileImage"), adm
 router.post("/task", protect, adminOnly, upload.array("attachments"), adminCtrl.createTask);
 router.get("/tasks", protect, adminOnly, adminCtrl.getTasks);
 router.get("/task/:id", protect, adminOnly, adminCtrl.getTaskById);
-router.put("/task/assign", protect, adminOnly, adminCtrl.assignTask);
+router.put("/task/assign", protect, adminOnly,adminCtrl.assignTask);
 router.put("/task/:id/status", protect, adminOnly, adminCtrl.updateTaskStatus);
 //admin routes
 router.get("/profile", protect, adminOnly, adminCtrl.getAdminProfile);
