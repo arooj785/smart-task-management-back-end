@@ -2,6 +2,7 @@ const User = require("../models/User");
 const Task = require("../models/Task");
 const bcrypt = require("bcryptjs");
 const path = require("path");
+const { notifyTaskAssigned, notifyTaskUpdated, notifyTaskCompleted, notificationLogger } = require("../utils/notificationHelper");
 
 //create worker (supports file upload: req.file)
 exports.createWorker = async(req, res)=>{
@@ -102,13 +103,30 @@ exports.createTask = async (req, res) =>{
     attachments: req.files ? req.files.map(f => `/uploads/${f.filename}`): [],
    })
    await task.save();
+   
+   // Emit socket event and create notification
    if (assignedTo && req.app.get("io")){
     const io = req.app.get("io");
+    notificationLogger.info('Task created with assignment', { taskId: task._id, assignedTo });
+    
     io.emit("taskAssigned",{
         taskId: task._id,
         title: task.title,
         assignedTo
     });
+    
+    // Create notification for assigned worker
+    try {
+        await notifyTaskAssigned(io, {
+            taskId: task._id,
+            title: task.title,
+            assignedTo: assignedTo,
+            assignedBy: req.user._id
+        });
+        notificationLogger.info('Notification created for task assignment', { taskId: task._id });
+    } catch (err) {
+        notificationLogger.error('Failed to create notification for task assignment', err);
+    }
    }
   
    return res.status(201).json({message: "Task created",task});
@@ -130,13 +148,30 @@ exports.assignTask = async (req, res) =>{
     task.assignedTo = workerId;
     task.status = "pending";
     await task.save();
-    //emit socket event
+    
+    notificationLogger.info('Task manually assigned', { taskId: task._id, workerId });
+    
+    //emit socket event and create notification
     if(req.app.get("io")) {
-        req.app.get("io").emit("taskAssigned", {
+        const io = req.app.get("io");
+        io.emit("taskAssigned", {
             taskId: task._id,
             title: task.title,
             assignedTo: workerId
         });
+        
+        // Create notification for assigned worker
+        try {
+            await notifyTaskAssigned(io, {
+                taskId: task._id,
+                title: task.title,
+                assignedTo: workerId,
+                assignedBy: req.user._id
+            });
+            notificationLogger.info('Notification created for manual task assignment', { taskId: task._id });
+        } catch (err) {
+            notificationLogger.error('Failed to create notification for manual task assignment', err);
+        }
     }
     return res.json({message: "Task assigned", task});
  }catch(err){
@@ -177,24 +212,62 @@ exports.updateTaskStatus = async (req, res) =>{
         const { status } = req.body;
         const id = req.params.id;
 
-        const task = await Task.findById(id);
+        const task = await Task.findById(id).populate('assignedTo createdBy');
         if (!task) {
             return res.status(404).json({ message: "Task Not Found" });
         }
 
+        const oldStatus = task.status;
+        notificationLogger.info('Task status update initiated', { 
+            taskId: task._id, 
+            oldStatus, 
+            newStatus: status,
+            updatedBy: req.user._id 
+        });
+        
         task.status = status;
         await task.save();
 
-        // emit socket event
+        // emit socket event and create notification
         if (req.app.get("io")) {
-            req.app.get("io").emit("taskUpdated", {
+            const io = req.app.get("io");
+            io.emit("taskUpdated", {
                 taskId: task._id,
                 status: task.status,
             });
+            
+            // Create notification for status update
+            try {
+                // If task is completed, use specific completion notification
+                if (status === 'completed' && task.createdBy) {
+                    await notifyTaskCompleted(io, {
+                        taskId: task._id,
+                        title: task.title,
+                        completedBy: req.user._id,
+                        createdBy: task.createdBy._id || task.createdBy,
+                        assignedTo: task.assignedTo?._id || task.assignedTo
+                    });
+                    notificationLogger.info('Task completion notification created', { taskId: task._id });
+                } else if (task.assignedTo) {
+                    // Regular status update notification
+                    await notifyTaskUpdated(io, {
+                        taskId: task._id,
+                        title: task.title,
+                        status: status,
+                        oldStatus: oldStatus,
+                        updatedBy: req.user._id,
+                        assignedTo: task.assignedTo._id || task.assignedTo
+                    });
+                    notificationLogger.info('Task update notification created', { taskId: task._id });
+                }
+            } catch (err) {
+                notificationLogger.error('Failed to create notification for task update', err);
+            }
         }
 
         return res.json({ message: "Status Updated", task });
     } catch (err) {
+        notificationLogger.error('Task status update failed', err);
         console.error(err);
         return res.status(500).json({ message: "Server error" });
     }

@@ -9,6 +9,8 @@ const connectdb = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const workerRoutes = require("./routes/workerRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const { initializeSocket } = require("./socket");
 //conect db
 connectdb();
 const app = express();
@@ -21,12 +23,10 @@ const io= new Server(server, {
     },
 })
 app.set("io", io);
-io.on("connection", (socket)=>{
-    console.log("New client connected: ", socket.id);
-    socket.on("disconnect", ()=>{
-        console.log("Client disconnected: ", socket.id);
-    });
-});
+
+// Initialize socket with authentication and event handlers
+initializeSocket(io);
+
 //Middleware
 app.use(cors())
 app.use(express.json())
@@ -37,6 +37,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/worker", workerRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.get("/", (req, res)=>{
     res.send("Task Management System API");
 });
