@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminCtrl = require('../controllers/adminController');
 const {protect, adminOnly} = require("../middleware/authMiddleware");
-const upload = require("../middleware/upload");
+const upload = require("../gitignore/upload");
 
 //Worker  routes
 router.post("/worker", protect, adminOnly, adminCtrl.createWorker);

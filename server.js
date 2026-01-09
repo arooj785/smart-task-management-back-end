@@ -1,13 +1,14 @@
-
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
-const {Server} = require("socket.io");
-require("dotenv").config();
+const { Server } = require("socket.io");
+
 const path = require("path");
 const cors = require("cors")
 const connectdb = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const workerRoutes = require("./routes/workerRoutes");
 //conect db
 connectdb();
 const app = express();
@@ -35,6 +36,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 //Routes
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/worker", workerRoutes);
 app.get("/", (req, res)=>{
     res.send("Task Management System API");
 });
@@ -45,7 +47,6 @@ app.use((err, req, res, next)=>{
 })
 //Start server
 const port = process.env.PORT||3000;
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
-
